@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Dict, List
 from argparse import ArgumentParser
 from collections import defaultdict
 import json
@@ -49,6 +50,12 @@ def parse_args():
 
 
     return parser.parse_args()
+
+def init_data(data: List[Dict], min_score):
+    for example in data:
+        for ctx in example["positive_ctxs"]:
+            if "score" not in ctx:
+                ctx["score"] = min_score + 1
 
 def read_id2code(id2code_path):
 
@@ -155,6 +162,7 @@ def iterator_span(args):
 
     with open(args.input) as fin:
         data = json.load(fin)
+        init_data(data, args.min_score)
 
     arg_it = _iterator_span_get_arguments(data, args.min_score, args.max_rank, args.mark_target, args.mark_silver, args.min_score_gold)
     arg_it = ((text, source, args.n_samples, args.min_length, args.max_length, args.temperature) for text, source in arg_it)
@@ -171,6 +179,7 @@ def iterator(args):
 
     with open(args.input) as fin:
         data = json.load(fin)
+        init_data(data, args.min_score)
 
     for sample in tqdm.tqdm(data):
 
@@ -207,7 +216,7 @@ def iterator(args):
                         yield source, target
             
             elif args.target == "title":
-                target = ctx['title'].strip() + " @@"
+                target = (ctx['title'] or "").strip() + " @@"
                 for _ in range(args.n_samples):
                     if args.mark_silver and float(ctx['score']) < args.min_score_gold:
                         yield source + " || ?", target
@@ -235,6 +244,8 @@ def iterator(args):
 def main():
 
     args = parse_args()
+    
+    clean_for_tsv = lambda text: text.replace('\n', ' ').replace('\t', ' ')
 
     with open(args.output + '.source', mode=args.mode) as src, open(args.output + '.target', mode=args.mode) as tgt:
 
@@ -242,9 +253,9 @@ def main():
 
             source = " " + source.strip()
             target = " " + target.strip()
-
-            src.write(source + "\n")
-            tgt.write(target + "\n")
+            
+            src.write(clean_for_tsv(source) + "\n")
+            tgt.write(clean_for_tsv(target) + "\n")
 
 if __name__ == '__main__':
 

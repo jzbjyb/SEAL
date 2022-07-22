@@ -15,8 +15,8 @@
 model=data/SEAL-checkpoint+index.KILT/SEAL.KILT.pt
 index=data/SEAL-checkpoint+index.KILT/KILT.fm_index
 #data=data/nq/biencoder-nq-dev.json
-data=/checkpoint/zhengbao/exp/side/data/edit_eval/fruit/test-dpr-preceding-inst0.json
-output=output/sealkilt_fruit_preceding.json
+data=/checkpoint/zhengbao/exp/side/data/edit_eval/fruit_gold/test-dpr-preceding-inst0.json
+output=output/test.json
 
 TOKENIZERS_PARALLELISM=false python -m seal.search \
     --topics_format dpr --topics ${data} \
