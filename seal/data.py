@@ -8,6 +8,7 @@ from typing import Optional
 import jsonlines
 import csv
 import ast
+import random
 import pathlib
 
 import json
@@ -33,6 +34,28 @@ class OutputFormat(Enum):
     MSMARCO = 'msmarco'
     KILT = 'kilt'
     DPR = 'dpr'
+    
+def keep_first(self: QueryIterator, count: int, shuffle: bool = False):  # in-place operation
+    size = len(self.order)
+    if count >= size:
+        return
+    if shuffle:
+        random.shuffle(self.order)
+    self.order = self.order[:count]
+    self.topics = {topic: self.topics[topic] for topic in self.order}
+    
+def shard(self: QueryIterator, shard_id: int, num_shards: int):  # in-place operation
+    assert shard_id < num_shards and shard_id >= 0
+    size = len(self.order)
+    if num_shards == 1:
+        return
+    shard_size = -(size // -num_shards)  # ceilling divide
+    start, end = shard_id * shard_size, (shard_id + 1) * shard_size
+    self.order = self.order[start:end]
+    self.topics = {topic: self.topics[topic] for topic in self.order}
+
+QueryIterator.keep_first = keep_first
+QueryIterator.shard = shard
 
 class DprQueryIterator(QueryIterator):
 

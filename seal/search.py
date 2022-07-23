@@ -7,9 +7,11 @@
 import random
 
 from more_itertools import chunked
+from sklearn.utils import shuffle
 
 from seal.retrieval import SEALSearcher
 from seal.data import TopicsFormat, OutputFormat, get_query_iterator, get_output_writer
+from seal.utils import setup_multi_gpu_slurm
 
 if __name__ == "__main__":
 
@@ -59,10 +61,20 @@ if __name__ == "__main__":
     parser.add_argument("--chunked", type=int, default=0)
     SEALSearcher.add_args(parser)
     args = parser.parse_args()
-
+    setup_multi_gpu_slurm(args)
     print(args)
+    
+    random.seed(42)
 
     query_iterator = get_query_iterator(args.topics, TopicsFormat(args.topics_format))
+    # reduce the dataset
+    if args.debug:
+        query_iterator.keep_first(count=500)
+    if args.keep_samples is not None:
+        query_iterator.keep_first(count=args.keep_samples, shuffle=True)
+    # shard the dataset
+    query_iterator.shard(shard_id=args.global_rank, num_shards=args.world_size)
+    args.output = f"{args.output}.{args.global_rank}" if args.is_multi else args.output
 
     output_writer = get_output_writer(
         args.output,
@@ -75,16 +87,6 @@ if __name__ == "__main__":
         max_passage_delimiter=args.max_passage_delimiter,
         max_passage_hits=args.max_passage_hits,
     )
-
-    if args.debug:
-        query_iterator.order = query_iterator.order[:500]
-        query_iterator.topics = {topic: query_iterator.topics[topic] for topic in query_iterator.order}
-
-    if args.keep_samples is not None and args.keep_samples < len(query_iterator.order):
-        random.seed(42)
-        random.shuffle(query_iterator.order)
-        query_iterator.order = query_iterator.order[: args.keep_samples]
-        query_iterator.topics = {topic: query_iterator.topics[topic] for topic in query_iterator.order}
 
     searcher = SEALSearcher.from_args(args)
 

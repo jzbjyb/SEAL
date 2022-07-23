@@ -1,10 +1,24 @@
 from typing import Dict, List, Tuple, Set
+import glob
 import argparse
 from collections import defaultdict
 import os
 import json
 import csv
 import numpy as np
+
+
+def merge(input_file_pattern: str, output_file: str, remove: bool = False):
+    files = glob.glob(input_file_pattern)
+    print(f"merge {len(files)} files")
+    merged = []
+    for file in files:
+        with open(file, "r") as fin:
+            merged.extend(json.load(fin))
+        if remove:
+            os.remove(file)
+    with open(output_file, "w") as fout:
+        json.dump(merged, fout, indent=2)
 
 
 def load_passages(
@@ -128,12 +142,15 @@ def replace_ctx_for_peer(peer_file: str, dpr_file: str, new_peer_file: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="preprocessing")
-    parser.add_argument("--task", type=str, choices=["convert_nq_to_beir_format", "convert_dpr_to_tsv_format", "replace_ctx_for_peer"])
+    parser.add_argument("--task", type=str, choices=["merge", "convert_nq_to_beir_format", "convert_dpr_to_tsv_format", "replace_ctx_for_peer"])
     parser.add_argument("--inp", type=str, help="input files/dirs", nargs="+")
     parser.add_argument("--out", type=str, help="output files/dirs", nargs="+")
     args = parser.parse_args()
 
-    if args.task == "convert_nq_to_beir_format":
+    if args.task == "merge":
+        input_file_pattern, output_file = args.inp[0], args.out[0]
+        merge(input_file_pattern, output_file, remove=True)
+    elif args.task == "convert_nq_to_beir_format":
         nq_dir = args.inp[0]
         beir_dir = args.out[0]
         convert_nq_to_beir_format(nq_dir, beir_dir)

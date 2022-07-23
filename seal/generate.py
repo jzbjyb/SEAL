@@ -15,6 +15,7 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from seal import fm_index_generate
 from seal.retrieval import SEALSearcher
+from seal.utils import setup_multi_gpu_slurm
 
 def format_example_for_generation(example: Dict, context_type: str = "positive_ctxs", num_contexts: int = 3) -> str:
     input_to_model = []
@@ -35,35 +36,24 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="Debug using a small number of inputs.")
     SEALSearcher.add_args(parser)
     args = parser.parse_args()
+    setup_multi_gpu_slurm(args)
     print(args)
 
-    random.seed(2022)
-    
-    # multi-job setup
-    is_slurm = os.getenv("SLURM_JOB_ID") is not None
-    if is_slurm:
-        world_size = int(os.getenv("SLURM_NTASKS"))
-        local_rank = int(os.getenv("SLURM_LOCALID"))
-        global_rank = int(os.getenv("SLURM_PROCID"))
-        args.device = f"cuda:{local_rank}"
-        print(f"SLURM job rank {global_rank} with GPU device {args.device}")
-    else:
-        world_size = 1
-        local_rank = global_rank = 0
-    is_multi_jobs = world_size > 1
+    random.seed(2022)    
     
     # load all data
     with open(args.input, "r") as fin:
         data: List[Dict] = json.load(fin)
         
     # slice data for current job
-    if is_multi_jobs:
-        size_per_job = int(np.ceil(len(data) / world_size))
-        start, end = global_rank * size_per_job, min((global_rank + 1) * size_per_job, len(data))
+    if args.is_multi:
+        size_per_job = int(np.ceil(len(data) / args.world_size))
+        start, end = args.global_rank * size_per_job, min((args.global_rank + 1) * size_per_job, len(data))
         data = data[start:end]
-        print(f"rank {global_rank}: #examples {len(data)} from {start} to {end}")
+        print(f"rank {args.global_rank}: #examples {len(data)} from {start} to {end}")
     else:
-        print(f"rank {global_rank}: #examples {len(data)} from {0} to {len(data)}")
+        print(f"rank {args.global_rank}: #examples {len(data)} from {0} to {len(data)}")
+    args.output = f"{args.output}.{args.global_rank}" if args.is_multi else args.output
     
     # format data
     inputs: List[str] = [format_example_for_generation(example, context_type=args.context_type) for example in data]
@@ -86,7 +76,6 @@ if __name__ == "__main__":
         raise NotImplementedError
     
     # generate and save outputs
-    args.output = f"{args.output}.{global_rank}" if is_multi_jobs else args.output
     with tqdm.tqdm(total=len(inputs), desc="Generating", disable=False) as bar, open(args.output, "w") as fout:
         batches = chunked(inputs, args.batch_size)
         for batch in batches:        

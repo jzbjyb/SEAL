@@ -4,6 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from email.policy import strict
+import argparse
+import os
 import torch
 from torch import nn
 
@@ -47,4 +50,21 @@ def load_state_dict_from_fairseq_checkpoint(model, path):
     _remove_ignore_keys_(state_dict)
     if hasattr(model, "lm_head"):
         model.lm_head = _make_linear_from_emb(model.model.shared)
-    model.model.load_state_dict(state_dict)
+    model.model.load_state_dict(state_dict, strict=False)  # TODO: dangerous
+
+
+def setup_multi_gpu_slurm(args: argparse.Namespace):
+    is_slurm = os.getenv("SLURM_JOB_ID") is not None
+    if is_slurm:
+        args.world_size = int(os.getenv("SLURM_NTASKS"))
+        args.local_rank = int(os.getenv("SLURM_LOCALID"))
+        args.global_rank = int(os.getenv("SLURM_PROCID"))
+        args.device = f"cuda:{args.local_rank}"
+        print(f"SLURM job: global rank {args.global_rank}, GPU device {args.device}")
+    else:
+        args.world_size = 1
+        args.local_rank = args.global_rank = 0
+        if not hasattr(args, "device") or not args.device:  # set device if not specified
+            args.device = f"cuda:{args.local_rank}"
+        print(f"Local job: global rank {args.global_rank}, GPU device {args.device}")
+    args.is_multi = args.world_size > 1

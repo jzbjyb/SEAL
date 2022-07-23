@@ -18,7 +18,7 @@ fi
 data=$2  # This folder should contain the correct files if you have run scripts/training/preprocess_fairseq.sh before!
 output=$3  # output directory
 
-num_update=50000
+num_update=100000
 save_every=10000
 warmup=500
 patience=10
