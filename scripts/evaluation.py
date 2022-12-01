@@ -6,7 +6,7 @@ import numpy as np
 
 
 def clean_text(text: str):
-    return text.replace("[ROW]", "").replace("[COL]", "").replace("[HEADER]", "")
+    return text.replace("[ROW]", "").replace("[COL]", "").replace("[HEADER]", "").replace("\n", " ").replace("\t", " ")
 
 
 def evaluate(
@@ -14,12 +14,24 @@ def evaluate(
     gold_file: str = None,
     metrics: List[str] = ["title", "unigram", "exact"],
     topks: List[int] = [1, 10, 100],
+    sample: int = 0.
 ):
     metric2topk2vals: Dict[str, Dict[int, List[float]]] = {m: defaultdict(list) for m in metrics}
     with open(prediction_file, "r") as fin, open(gold_file or prediction_file, "r") as gfin:
         data = json.load(fin)
         data_gold = json.load(gfin)
         assert len(data) == len(data_gold)
+        
+        if sample:
+            sample_inds = np.random.choice(len(data), min(sample, len(data)), replace=False)
+            for si in sample_inds:
+                example = data[si]
+                q = example['question']
+                golds = [ctx["title"] + "|" + ctx["text"] for ctx in example["positive_ctxs"][:3]]
+                rets = [ctx["title"] + "|" + ctx["text"] for ctx in example["ctxs"][:3]]
+                print(q, '------', '\n'.join(golds), '------', '\n'.join(rets), sep='\n')
+                print()
+        
         for query, query_gold in zip(data, data_gold):
             if "title" in metrics:
                 gold_titles = set([ctx["title"].replace("_", " ") for ctx in query_gold["positive_ctxs"]])
@@ -56,6 +68,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--prediction", type=str, help="prediction file")
     parser.add_argument("--gold", type=str, default=None, help="gold file")
+    parser.add_argument("--sample", type=int, default=0, help="sample a few examples for debugging")
     args = parser.parse_args()
 
-    evaluate(args.prediction, args.gold)
+    evaluate(args.prediction, args.gold, sample=args.sample)
